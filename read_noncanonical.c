@@ -19,7 +19,7 @@
 #define FALSE 0
 #define TRUE 1
 
-#define BUF_SIZE 128
+#define BUF_SIZE 256
 
 volatile int STOP = FALSE;
 
@@ -89,19 +89,19 @@ int main(int argc, char *argv[])
     printf("New termios structure set\n");
 
     // Loop for input
-    unsigned char buf[BUF_SIZE + 1] = {0}; // +1: Save space for the final '\0' char
+    unsigned char in_char;
     unsigned char received_message[BUF_SIZE + 1] = {0};
     int message_idx=0;
-    //unsigned char output[9999999999] = {0};
+
     while (STOP == FALSE)
     {
         // Returns after 1 chars has been input
-        int bytes = read(fd, buf, 1);        
-        buf[bytes] = '\0'; // Set end of string to '\0', so we can printf
+        read(fd, &in_char, 1);        
     
-        received_message[message_idx] = buf[0];
+        received_message[message_idx] = in_char;
         message_idx++;
-        if (buf[0] == '\0')
+
+        if (in_char == '\0')
             STOP = TRUE;
     }
     
