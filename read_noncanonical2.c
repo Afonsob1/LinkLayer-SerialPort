@@ -1,4 +1,4 @@
-// Read from serial port in non-canonical mode
+// Write to serial port in non-canonical mode
 //
 // Modified by: Eduardo Nuno Almeida [enalmeida@fe.up.pt]
 
@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <termios.h>
@@ -20,12 +21,15 @@
 #define TRUE 1
 
 #define BUF_SIZE 256
-
 #define FLAG 0x7E
-#define A2 0x01
-#define C2 0x07
+#define SET 0x03
+#define UA 0x07
+#define TRANSMITTER_COMMAND 0x03
+#define RECEIVER_REPLY 0x03
+#define RECEIVER_COMMAND 0x01
+#define TRANSMITTER_REPLY 0x01
+#define SU_BUF_SIZE 5
 
-volatile int STOP = FALSE;
 
 typedef enum{
     StateSTART,
@@ -36,10 +40,16 @@ typedef enum{
     StateSTOP
 } State;
 
+
+
+volatile int STOP = FALSE;
+int alarm_enabled = FALSE;
+int timeout_count = 0;
+
 void receive_set(State * state, unsigned char byte){
     
-    unsigned char A = 0x03;
-    unsigned char C = 0x03;
+    unsigned char A = TRANSMITTER_COMMAND;
+    unsigned char C = SET;
     
     switch(*state){
     case StateSTART:
@@ -161,7 +171,6 @@ int main(int argc, char *argv[])
     {
         // Returns after 1 chars has been input
         read(fd, &in_char, 1);        
-    
         receive_set(&state, in_char);
     }
     
@@ -169,11 +178,11 @@ int main(int argc, char *argv[])
     
     printf("Received SET");
     
-    unsigned char bcc = A2^C2;
+    unsigned char bcc = RECEIVER_REPLY^UA;
     
-    unsigned char UA[5] = {FLAG, A2, C2, bcc, FLAG};
+    unsigned char su_buf[SU_BUF_SIZE] = {FLAG, RECEIVER_REPLY, UA, bcc, FLAG};
     
-    int bytes = write(fd, UA, 5);
+    int bytes = write(fd, su_buf, SU_BUF_SIZE);
 
     // Wait until all bytes have been written to the serial port
     sleep(1);
