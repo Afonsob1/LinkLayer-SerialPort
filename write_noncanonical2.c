@@ -45,6 +45,7 @@ typedef enum{
 
 
 volatile int STOP = FALSE;
+State state = StateSTART;
 int alarm_enabled = FALSE;
 int timeout_count = 0;
 
@@ -114,6 +115,7 @@ void receive_UA(State * state, unsigned char byte){
 void alarmHandler(int signal)
 {
     alarm_enabled = FALSE;
+    state = StateSTART;
     timeout_count++;
     printf("Timeout #%d\n", timeout_count);
 }
@@ -190,7 +192,6 @@ int main(int argc, char *argv[])
 
     (void)signal(SIGALRM, alarmHandler);
     (void)siginterrupt(SIGALRM,TRUE); //system call interrupted by alarm isn't restarted
-    State state = StateSTART;
     // Loop for input
     unsigned char in_char;
     
