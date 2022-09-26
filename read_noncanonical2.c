@@ -43,8 +43,6 @@ typedef enum{
 
 
 volatile int STOP = FALSE;
-int alarm_enabled = FALSE;
-int timeout_count = 0;
 
 void receive_set(State * state, unsigned char byte){
     
@@ -78,7 +76,7 @@ void receive_set(State * state, unsigned char byte){
     case StateC:
         if(byte == FLAG)
             *state = StateFLAG;
-        else if(byte == A^C)
+        else if(byte == (A^C))
             *state = StateBCC;
         else
             *state = StateSTART;
@@ -176,16 +174,17 @@ int main(int argc, char *argv[])
     
     
     
-    printf("Received SET");
+    printf("Received set up frame\n");
     
     unsigned char bcc = RECEIVER_REPLY^UA;
     
     unsigned char su_buf[SU_BUF_SIZE] = {FLAG, RECEIVER_REPLY, UA, bcc, FLAG};
     
-    int bytes = write(fd, su_buf, SU_BUF_SIZE);
-
+    write(fd, su_buf, SU_BUF_SIZE);
+    printf("Sent unnumbered acknowledgment frame\n");
     // Wait until all bytes have been written to the serial port
     sleep(1);
+    printf("Connection established\n");
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)

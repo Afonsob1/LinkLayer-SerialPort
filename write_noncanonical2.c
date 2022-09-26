@@ -47,15 +47,13 @@ typedef enum{
 volatile int STOP = FALSE;
 int alarm_enabled = FALSE;
 int timeout_count = 0;
-int fd;
 
-
-void send_set(){
+void send_set(int fd){
 
     const unsigned char BCC1 = TRANSMITTER_COMMAND^SET;
     char su_buf[SU_BUF_SIZE] = {FLAG,TRANSMITTER_COMMAND,SET,BCC1,FLAG};
-    int bytes = write(fd, su_buf, SU_BUF_SIZE);
-    printf("%d bytes written\n", bytes);
+    write(fd, su_buf, SU_BUF_SIZE);
+    printf("Sent set up frame\n");
     // Wait until all bytes have been written to the serial port
     sleep(1);
 
@@ -93,7 +91,7 @@ void receive_UA(State * state, unsigned char byte){
     case StateC:
         if(byte == FLAG)
             *state = StateFLAG;
-        else if(byte == A^C)
+        else if(byte == (A^C))
             *state = StateBCC;
         else
             *state = StateSTART;
@@ -117,8 +115,7 @@ void alarmHandler(int signal)
 {
     alarm_enabled = FALSE;
     timeout_count++;
-    printf("Alarm #%d\n", timeout_count);
-    send_set();
+    printf("Timeout #%d\n", timeout_count);
 }
 
 
@@ -141,7 +138,7 @@ int main(int argc, char *argv[])
 
     // Open serial port device for reading and writing, and not as controlling tty
     // because we don't want to get killed if linenoise sends CTRL-C.
-    fd = open(serialPortName, O_RDWR | O_NOCTTY);
+    int fd = open(serialPortName, O_RDWR | O_NOCTTY);
 
     if (fd < 0)
     {
@@ -190,11 +187,9 @@ int main(int argc, char *argv[])
 
     printf("New termios structure set\n");
 
-    send_set();
-
 
     (void)signal(SIGALRM, alarmHandler);
-
+    (void)siginterrupt(SIGALRM,TRUE); //system call interrupted by alarm isn't restarted
     State state = StateSTART;
     // Loop for input
     unsigned char in_char;
@@ -204,7 +199,8 @@ int main(int argc, char *argv[])
 
         if (alarm_enabled == FALSE)
         {
-            alarm(TIMEOUT_SECS); // Set alarm to be triggered in 3s
+            send_set(fd);
+            alarm(TIMEOUT_SECS); // Set alarm
             alarm_enabled = TRUE;
         }
 
@@ -213,10 +209,15 @@ int main(int argc, char *argv[])
         receive_UA(&state,in_char);
 
     }
+
     alarm(0);
 
     if(timeout_count == MAX_TIMEOUTS){
-        printf("Timeout\n");
+        printf("Max timeouts exceeded\n");
+    }
+    else{
+        printf("Received unnumbered acknowledgment frame\n");
+        printf("Connection established\n");
     }
 
     // Restore the old port settings
