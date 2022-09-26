@@ -24,8 +24,10 @@
 #define FLAG 0x7E
 #define SET 0x03
 #define UA 0x07
-#define ADDRESS_COMMAND 0x03
-#define ADDRESS_REPLY 0x03
+#define TRANSMITTER_COMMAND 0x03
+#define RECEIVER_REPLY 0x03
+#define RECEIVER_COMMAND 0x01
+#define TRANSMITTER_REPLY 0x01
 #define SU_BUF_SIZE 5
 #define TIMEOUT_SECS 3
 #define MAX_TIMEOUTS 3
@@ -45,11 +47,24 @@ typedef enum{
 volatile int STOP = FALSE;
 int alarm_enabled = FALSE;
 int timeout_count = 0;
+int fd;
 
-void receive_su_frame(State * state, unsigned char byte){
+
+void send_set(){
+
+    const unsigned char BCC1 = TRANSMITTER_COMMAND^SET;
+    char su_buf[SU_BUF_SIZE] = {FLAG,TRANSMITTER_COMMAND,SET,BCC1,FLAG};
+    int bytes = write(fd, su_buf, SU_BUF_SIZE);
+    printf("%d bytes written\n", bytes);
+    // Wait until all bytes have been written to the serial port
+    sleep(1);
+
+}
+
+void receive_UA(State * state, unsigned char byte){
     
-    unsigned char A = 0x01;
-    unsigned char C = 0x07;
+    unsigned char A = RECEIVER_REPLY;
+    unsigned char C = UA;
     
     switch(*state){
     case StateSTART:
@@ -103,6 +118,7 @@ void alarmHandler(int signal)
     alarm_enabled = FALSE;
     timeout_count++;
     printf("Alarm #%d\n", timeout_count);
+    send_set();
 }
 
 
@@ -125,7 +141,7 @@ int main(int argc, char *argv[])
 
     // Open serial port device for reading and writing, and not as controlling tty
     // because we don't want to get killed if linenoise sends CTRL-C.
-    int fd = open(serialPortName, O_RDWR | O_NOCTTY);
+    fd = open(serialPortName, O_RDWR | O_NOCTTY);
 
     if (fd < 0)
     {
@@ -174,17 +190,7 @@ int main(int argc, char *argv[])
 
     printf("New termios structure set\n");
 
-    const unsigned char BCC1 = ADDRESS_COMMAND^SET;
-
-    char su_buf[SU_BUF_SIZE] = {FLAG,ADDRESS_COMMAND,SET,BCC1,FLAG};
-    
-
-    int bytes = write(fd, su_buf, SU_BUF_SIZE);
-    printf("%d bytes written\n", bytes);
-
-    // Wait until all bytes have been written to the serial port
-    sleep(1);
-    
+    send_set();
 
 
     (void)signal(SIGALRM, alarmHandler);
@@ -204,12 +210,14 @@ int main(int argc, char *argv[])
 
         // Returns after 1 chars has been input
         read(fd, &in_char, 1);        
-        receive_su_frame(&state,in_char);
+        receive_UA(&state,in_char);
 
-        if (in_char == '\0')
-            STOP = TRUE;
     }
+    alarm(0);
 
+    if(timeout_count == MAX_TIMEOUTS){
+        printf("Timeout\n");
+    }
 
     // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
