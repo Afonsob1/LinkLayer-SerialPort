@@ -37,6 +37,8 @@
 #define TIMEOUT_SECS 3
 #define MAX_TIMEOUTS 3
 
+#define CONTROL(n)  ((n) << 6)
+
 
 
 typedef enum{
@@ -44,7 +46,8 @@ typedef enum{
     StateFLAG,
     StateA,
     StateC,
-    StateBCC,
+    StateBCC1,
+    StateBCC2,
     StateSTOP
 } State;
 
@@ -100,13 +103,13 @@ void receive_UA(State * state, unsigned char byte){
         if(byte == FLAG)
             *state = StateFLAG;
         else if(byte == (A^C))
-            *state = StateBCC;
+            *state = StateBCC1;
         else
             *state = StateSTART;
         
         break;
         
-    case StateBCC:
+    case StateBCC1:
         if(byte == FLAG)
             *state = StateSTOP;
         else
@@ -161,13 +164,13 @@ void receive_set(State * state, unsigned char byte){
         if(byte == FLAG)
             *state = StateFLAG;
         else if(byte == (A^C))
-            *state = StateBCC;
+            *state = StateBCC1;
         else
             *state = StateSTART;
         
         break;
         
-    case StateBCC:
+    case StateBCC1:
         if(byte == FLAG)
             *state = StateSTOP;
         else
@@ -288,6 +291,78 @@ int llopen(const char * port, int flag){
         printf("Connection established\n");
     }
     return fd;
+}
+
+int llread(int fd, char * buffer, int ns){
+    
+    unsigned char A = TRANSMITTER_COMMAND;
+    unsigned char C = COMMAND(ns);
+    unsigned char bcc1 = A^C;
+    unsigned char bcc2 = 0;
+
+    unsigned int data_pos = 0;
+    
+    // read mensage
+
+    state = StateSTART;
+
+    while(state!=StateEnd){
+        char byte;
+        read(fd, &byte, 1);  
+
+        switch(state){
+        case StateSTART:
+            if(byte == FLAG)
+                state = StateFLAG;
+            
+            break;
+        case StateFLAG:
+            if(byte == FLAG)
+                state = StateFLAG;
+            else if(byte == A)
+                state = StateA;
+            else
+                state = StateSTART;
+            
+            break;
+        case StateA:
+            if(byte == FLAG)
+                state = StateFLAG;
+            else if(byte == C)
+                state = StateC;
+            else
+                state = StateSTART;
+            
+            break;
+        case StateC:
+            if(byte == FLAG)
+                state = StateFLAG;
+            else if(byte == (A^C))
+                state = StateBCC1;
+            else
+                state = StateSTART;
+            
+            break;
+            
+        case StateBCC1:
+            if(byte == FLAG)
+                state = StateEnd;
+            else
+
+               buffer[data_pos++] = byte;
+                     
+            break;
+        }
+        
+    }
+
+    
+    // write ACK
+    char ack = {FLAG,A,C,BCC1,FLAG};
+    write(fd, su_buf, SU_BUF_SIZE);
+    printf("Sent set up frame\n");
+    // Wait until all bytes have been written to the serial port
+    sleep(1);
 }
 
 
