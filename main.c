@@ -37,7 +37,11 @@
 #define TIMEOUT_SECS 3
 #define MAX_TIMEOUTS 3
 
+#define STUFFING 0x7d
+
 #define CONTROL(n)  ((n) << 6)
+#define ACK(n)  ((n) << 7  | 0x05)
+#define NACK(n)  ((n) << 7 | 0x01)
 
 
 
@@ -47,7 +51,8 @@ typedef enum{
     StateA,
     StateC,
     StateBCC1,
-    StateBCC2,
+    StateReply,
+    StateReplyData,
     StateSTOP
 } State;
 
@@ -58,6 +63,8 @@ int alarm_enabled = FALSE;
 int timeout_count = 0;
 struct termios oldtio;
 struct termios newtio;
+
+unsigned int ns = 0;
 
 void send_set(int fd){
 
@@ -186,6 +193,7 @@ int llopen(const char * port, int flag){
     // because we don't want to get killed if linenoise sends CTRL-C.
     
     state = StateSTART;
+    ns = 0;
 
     int fd = open(port, O_RDWR | O_NOCTTY);
     if (fd < 0)
@@ -293,15 +301,22 @@ int llopen(const char * port, int flag){
     return fd;
 }
 
-int llread(int fd, char * buffer, int ns){
+int llread(int fd, char * buffer, int max_size){
     
     unsigned char A = TRANSMITTER_COMMAND;
-    unsigned char C = COMMAND(ns);
+    unsigned char C_new = COMMAND(ns);
     unsigned char bcc1 = A^C;
-    unsigned char bcc2 = 0;
 
-    unsigned int data_pos = 0;
+    unsigned char C_old = COMMAND((ns==0)?1:0);
+    unsigned char bcc1_old = A^C_old;
+
+    bool is_stuffing = false;
+
+
+    bool is_error = false;
     
+    bool reply = false;
+
     // read mensage
 
     state = StateSTART;
@@ -328,9 +343,13 @@ int llread(int fd, char * buffer, int ns){
         case StateA:
             if(byte == FLAG)
                 state = StateFLAG;
-            else if(byte == C)
+            else if(byte == C){
                 state = StateC;
-            else
+                reply = false;
+            }else if(byte == C_old){
+                state = StateReply;
+                reply = true;
+            }else
                 state = StateSTART;
             
             break;
@@ -343,23 +362,66 @@ int llread(int fd, char * buffer, int ns){
                 state = StateSTART;
             
             break;
-            
-        case StateBCC1:
+        case StateReply:
             if(byte == FLAG)
-                state = StateEnd;
+                state = StateFLAG;
+            else if(byte == (A^C_old))
+                state = StateReplyData;
             else
-
-               buffer[data_pos++] = byte;
-                     
+                state = StateSTART;
+            
+            break;
+        case StateReply:
+            // fazer byte stuffing
+            
+            if(!is_stuffing && byte == FLAG){
+                state = StateEnd;
+            }
+            if(!is_stuffing && byte == STUFFING){
+                is_stuffing = true;
+            }else{
+                is_stuffing = false;
+            }
+            
+            break;
+        case StateBCC1:
+            // fazer byte stuffing
+            
+            if(!is_stuffing && byte == FLAG){
+                state = StateEnd;
+                if(buffer[data_pos-1] != BCC2){
+                    is_error = true;        // send NACK
+                }else{
+                    is_error = false;       // send ACK
+                }
+            }
+            if(!is_stuffing && byte == STUFFING){
+                is_stuffing = true;
+            }else{
+                if(data_pos>=max_size){
+                    is_error = true;        // sendNACK
+                    state = StateEnd;
+                }else{
+                    buffer[data_pos++] = byte;
+                }
+                is_stuffing = false;
+            }   
             break;
         }
         
     }
 
+    if(is_error){
+        // write NACK
+        char C = NACK(ns);
+        char ack = {FLAG,A,C,BCC1,FLAG};
+        write(fd, su_buf, SU_BUF_SIZE);
     
-    // write ACK
-    char ack = {FLAG,A,C,BCC1,FLAG};
-    write(fd, su_buf, SU_BUF_SIZE);
+    }else{
+        // write ACK
+        char ack = {FLAG,A,C,BCC1,FLAG};
+        write(fd, su_buf, SU_BUF_SIZE);
+    }
     printf("Sent set up frame\n");
     // Wait until all bytes have been written to the serial port
     sleep(1);
@@ -403,7 +465,7 @@ int main(int argc, char *argv[])
     }
     
     // mandar I(0)
-
+    
 
 
     // Disconnect
