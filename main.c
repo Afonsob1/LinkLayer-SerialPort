@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 // Baudrate settings are defined in <asm/termbits.h>, which is
 // included by <termios.h>
@@ -51,7 +52,7 @@ typedef enum{
     StateA,
     StateC,
     StateBCC1,
-    StateReply,
+    StateCReply,
     StateReplyData,
     StateSTOP
 } State;
@@ -301,27 +302,50 @@ int llopen(const char * port, int flag){
     return fd;
 }
 
-int llread(int fd, char * buffer, int max_size){
-    
-    unsigned char A = TRANSMITTER_COMMAND;
-    unsigned char C_new = COMMAND(ns);
-    unsigned char bcc1 = A^C;
+void sendACK(int fd, bool reply){
+    printf("Send ack\n");
+    // write ACK
+    char C = ACK( (ns)?0:1);
 
-    unsigned char C_old = COMMAND((ns==0)?1:0);
+    if(reply){
+        C = ACK(ns);
+    }
+    
+    char ack[] = {FLAG,0x03,C,0x03^C,FLAG};
+    write(fd, ack, SU_BUF_SIZE);
+}
+
+void sendNACK(int fd){
+    printf("Send Nack\n");
+    // write NACK
+    char C = NACK(ns);
+    char ack[] = {FLAG,0x03,C,0x03^C,FLAG};
+    write(fd, ack, SU_BUF_SIZE);
+}
+
+int llread(int fd, char * buffer, int max_size){
+
+    unsigned char A = TRANSMITTER_COMMAND;
+
+    unsigned char C_new = CONTROL(ns);
+    unsigned char bcc1 = A^C_new;
+
+    unsigned char C_old = CONTROL((ns==0)?1:0);
     unsigned char bcc1_old = A^C_old;
 
     bool is_stuffing = false;
-
-
     bool is_error = false;
-    
     bool reply = false;
+    
+    u_char bcc2 = 0;
+
+    size_t data_pos = 0;
 
     // read mensage
 
     state = StateSTART;
 
-    while(state!=StateEnd){
+    while(state!=StateSTOP){
         char byte;
         read(fd, &byte, 1);  
 
@@ -341,13 +365,14 @@ int llread(int fd, char * buffer, int max_size){
             
             break;
         case StateA:
+
             if(byte == FLAG)
                 state = StateFLAG;
-            else if(byte == C){
+            else if(byte == C_new){
                 state = StateC;
                 reply = false;
             }else if(byte == C_old){
-                state = StateReply;
+                state = StateCReply;
                 reply = true;
             }else
                 state = StateSTART;
@@ -356,13 +381,13 @@ int llread(int fd, char * buffer, int max_size){
         case StateC:
             if(byte == FLAG)
                 state = StateFLAG;
-            else if(byte == (A^C))
+            else if(byte == (A^C_new))
                 state = StateBCC1;
             else
                 state = StateSTART;
             
             break;
-        case StateReply:
+        case StateCReply:
             if(byte == FLAG)
                 state = StateFLAG;
             else if(byte == (A^C_old))
@@ -371,11 +396,14 @@ int llread(int fd, char * buffer, int max_size){
                 state = StateSTART;
             
             break;
-        case StateReply:
+        case StateReplyData:
             // fazer byte stuffing
+            //printf("Reply \n");
             
             if(!is_stuffing && byte == FLAG){
-                state = StateEnd;
+
+
+                state = StateSTOP;
             }
             if(!is_stuffing && byte == STUFFING){
                 is_stuffing = true;
@@ -388,20 +416,27 @@ int llread(int fd, char * buffer, int max_size){
             // fazer byte stuffing
             
             if(!is_stuffing && byte == FLAG){
-                state = StateEnd;
-                if(buffer[data_pos-1] != BCC2){
+                state = StateSTOP;
+                bcc2 ^= buffer[data_pos-1]; // antes tinha se feito xor com o bcc2 (enviado), agr faz-se outra vez para reverter esse xor 
+
+                if(buffer[data_pos-1] !=bcc2){
                     is_error = true;        // send NACK
                 }else{
                     is_error = false;       // send ACK
                 }
+
+                break;
             }
+
+
             if(!is_stuffing && byte == STUFFING){
                 is_stuffing = true;
             }else{
                 if(data_pos>=max_size){
                     is_error = true;        // sendNACK
-                    state = StateEnd;
+                    state = StateSTOP;
                 }else{
+                    bcc2 ^= byte;
                     buffer[data_pos++] = byte;
                 }
                 is_stuffing = false;
@@ -412,19 +447,25 @@ int llread(int fd, char * buffer, int max_size){
     }
 
     if(is_error){
-        // write NACK
-        char C = NACK(ns);
-        char ack = {FLAG,A,C,BCC1,FLAG};
-        write(fd, su_buf, SU_BUF_SIZE);
-    
+        printf("sending nack");
+        sendNACK(fd);
     }else{
-        // write ACK
-        char ack = {FLAG,A,C,BCC1,FLAG};
-        write(fd, su_buf, SU_BUF_SIZE);
+        
+        sendACK(fd, reply);
+        printf("Ns: %d\n", ns);
+        if(!reply)
+            ns = (ns)?0:1;
+        else
+            printf("Recv Reply\n");
     }
-    printf("Sent set up frame\n");
+
+    buffer[data_pos-1] = 0;
+
+    printf("\nReceive %d bytes \n", data_pos);
+
     // Wait until all bytes have been written to the serial port
     sleep(1);
+
 }
 
 
@@ -465,9 +506,12 @@ int main(int argc, char *argv[])
     }
     
     // mandar I(0)
-    
-
-
+    printf("Reading mensage\n");
+    char buffer[10000];
+    while(1){
+        llread(fd , buffer ,10000);
+        printf("Message received: '%s'\n", buffer);
+    }
     // Disconnect
 
     // Restore the old port settings
