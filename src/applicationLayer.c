@@ -218,8 +218,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                 case StateReceiveEND:
                     read_control_packet(&stateReceive,buffer,&end_file_size,end_file_name);
                     printf("COMPARACOES INICIO\n");
-                    if(start_file_size == end_file_size)
-                        printf("Error getting file size\n");
+                    if(start_file_size != end_file_size)
+                        printf("Error getting file size %d %d\n",start_file_size,end_file_size);
                     if(strcmp(start_file_name,end_file_name) != 0)
                         printf("Error getting file name\n");
 
