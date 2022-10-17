@@ -16,7 +16,6 @@
 
 State state;
 
-int sequence_number=0;
 
 volatile int STOP = FALSE;
 int alarm_enabled = FALSE;
@@ -25,6 +24,15 @@ struct termios oldtio;
 struct termios newtio;
 
 unsigned int ns = 0;
+
+// Alarm function handler
+void alarmHandler(int signal)
+{
+    alarm_enabled = FALSE;
+    state = StateSTART;
+    timeout_count++;
+    printf("Timeout #%d\n", timeout_count);
+}
 
 void send_set(int fd){
 
@@ -37,20 +45,33 @@ void send_set(int fd){
 
 }
 
+void send_UA(int fd){
+    unsigned char bcc = TRANSMITTER_COMMAND^UA;
+    unsigned char su_buf[SU_BUF_SIZE] = {FLAG, TRANSMITTER_COMMAND, UA, bcc, FLAG};
+    write(fd, su_buf, SU_BUF_SIZE);
+}
+
+void send_disc(int fd){
+    unsigned char bcc = TRANSMITTER_COMMAND^DISC;
+    unsigned char su_buf[SU_BUF_SIZE] = {FLAG, TRANSMITTER_COMMAND, DISC, bcc, FLAG};
+    write(fd, su_buf, SU_BUF_SIZE);
+}
+
+
 
 void send_data(int fd,char* buffer, int length){
 
-    printf("Sending %s %d %d\n", buffer, sequence_number, length);
+    printf("Sending %d %d\n", ns, length);
 
     size_t frame_size = 6 + 2*length;
     unsigned char * frame = (unsigned char*)malloc(frame_size); 
 
-    const unsigned char BCC1 = TRANSMITTER_COMMAND^CONTROL_FIELD(sequence_number); 
+    const unsigned char BCC1 = TRANSMITTER_COMMAND^CONTROL_FIELD(ns); 
 
     size_t numEsc = 0;
     frame[0] = FLAG; 
     frame[1] = TRANSMITTER_COMMAND; 
-    frame[2] = CONTROL_FIELD(sequence_number);
+    frame[2] = CONTROL_FIELD(ns);
     if(BCC1==FLAG || BCC1==ESC){
         frame[3]=ESC;
         numEsc++;
@@ -155,6 +176,7 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
     while (state != StateSTOP || ack==FALSE){
         if (alarm_enabled == FALSE)
         {
+            (void)signal(SIGALRM, alarmHandler);
             send_data(fd,buffer,bufSize);
             alarm(TIMEOUT_SECS); // Set alarm
             alarm_enabled = TRUE;
@@ -162,13 +184,13 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
         // Returns after 1 chars has been input
         read(fd, &in_char, 1);        
-        receive_ACK(&state,&ack,in_char,1-sequence_number);
+        receive_ACK(&state,&ack,in_char,1-ns);
     }
     
     alarm(0); //  alarm
     
     if(ack==ACKN){
-        sequence_number=(1-sequence_number);
+        ns=(1-ns);
         printf("Received ACK \n");
     }else{
         //NACK
@@ -230,15 +252,57 @@ void receive_UA(State * state, unsigned char byte){
 
 }
 
+void receive_disc(State * state, unsigned char byte){
+    
+    unsigned char A = RECEIVER_REPLY;
+    unsigned char C = DISC;
+    
+    switch(*state){
+    case StateSTART:
+        if(byte == FLAG)
+            *state = StateFLAG;
+        break;
+    case StateFLAG:
+        if(byte == FLAG)
+            *state = StateFLAG;
+        else if(byte == A)
+            *state = StateA;
+        else
+            *state = StateSTART;
+        
+        break;
+    case StateA:
+        if(byte == FLAG)
+            *state = StateFLAG;
+        else if(byte == C)
+            *state = StateC;
+        else
+            *state = StateSTART;
+        
+        break;
+    case StateC:
+        if(byte == FLAG)
+            *state = StateFLAG;
+        else if(byte == (A^C))
+            *state = StateBCC1;
+        else
+            *state = StateSTART;
+        
+        break;
+        
+    case StateBCC1:
+        if(byte == FLAG)
+            *state = StateSTOP;
+        else
+            *state = StateSTART;
+        
+        break;
+    }
 
-// Alarm function handler
-void alarmHandler(int signal)
-{
-    alarm_enabled = FALSE;
-    state = StateSTART;
-    timeout_count++;
-    printf("Timeout #%d\n", timeout_count);
 }
+
+
+
 
 
 void receive_set(State * state, unsigned char byte){
@@ -360,6 +424,7 @@ int llopen(LinkLayer connectionParameters){
 
             if (alarm_enabled == FALSE)
             {
+                (void)signal(SIGALRM, alarmHandler);
                 send_set(fd);
                 alarm(connectionParameters.timeout); // Set alarm
                 alarm_enabled = TRUE;
@@ -375,6 +440,7 @@ int llopen(LinkLayer connectionParameters){
 
         if(timeout_count == connectionParameters.nRetransmissions){
             printf("Max timeouts exceeded\n");
+            return -1;
         }
         else{
             printf("Received unnumbered acknowledgment frame\n");
@@ -550,16 +616,19 @@ int llread(int fd, unsigned char * buffer){
     }
 
     if(is_error){
-        printf("sending nack");
+        printf("Sending NACK %d\n ", ns);
         sendNACK(fd);
+        return llread(fd, buffer);
     }else{
         
         sendACK(fd, reply);
         printf("Ns: %d\n", ns);
-        if(!reply)
+        if(!reply){
             ns = (ns)?0:1;
-        else
+        }else{
             printf("Recv Reply\n");
+            return llread(fd, buffer);
+        }
     }
 
     buffer[data_pos-1] = 0;
@@ -568,10 +637,63 @@ int llread(int fd, unsigned char * buffer){
 
     // Wait until all bytes have been written to the serial port
     sleep(1);
+    return 0;
 
 }
 
-int llclose(int fd, int showStatistics){
+int llclose(int fd, int showStatistics, LinkLayerRole ll){
+    char in_char;
+    state=StateSTART;
+    if(ll==LlTx){
+        alarm_enabled = FALSE;
+        timeout_count = 0;
+        while (state != StateSTOP){
+            if (alarm_enabled == FALSE)
+                {
+                    (void)signal(SIGALRM, alarmHandler);
+                    printf("Sending DISC\n");
+                    send_disc(fd);
+                    alarm(TIMEOUT_SECS); // Set alarm
+                    alarm_enabled = TRUE;
+                }
+            // Returns after 1 chars has been input
+            read(fd, &in_char, 1);        
+            receive_disc(&state,in_char);
+        }
+        alarm(0); //  alarm
+        printf("Received DISC\n");
+        send_UA(fd);
+        printf("Sending UA\n");
+    }
+    else{
+        alarm_enabled = FALSE;
+        timeout_count = 0;
+        while (state != StateSTOP){
+            read(fd, &in_char, 1);        
+            receive_disc(&state,in_char);
+        }
+        printf("Received DISC\n");
+        alarm(0); //  alarm
+        alarm_enabled = FALSE;
+        state=StateSTART;
+        timeout_count = 0;
+        while (state != StateSTOP){
+            if (alarm_enabled == FALSE)
+                {
+                    (void)signal(SIGALRM, alarmHandler);
+                    send_disc(fd);
+                    printf("Sending DISC\n");
+                    alarm(TIMEOUT_SECS); // Set alarm
+                    alarm_enabled = TRUE;
+                }
+            // Returns after 1 chars has been input
+            read(fd, &in_char, 1);        
+            receive_UA(&state,in_char);
+        }
+        printf("Received UA\n"); 
+        alarm(0); //  alarm
+    }
+
      // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
     {

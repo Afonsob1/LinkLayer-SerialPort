@@ -171,7 +171,11 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     connectionParameters.nRetransmissions = nTries;
     connectionParameters.timeout = timeout;
     
-    appLayer.fileDescriptor = llopen(connectionParameters); 
+    appLayer.fileDescriptor = llopen(connectionParameters);
+    if(appLayer.fileDescriptor==-1){
+        printf("Error llopen\n");
+        return; 
+    }
 
     char sequence_number = 0;
     unsigned int data_packet_size = DATA_SIZE + 4;
@@ -260,7 +264,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         fclose(file);
     }
     free(buffer);
-    llclose(appLayer.fileDescriptor,0); 
+    llclose(appLayer.fileDescriptor,0,llRole); 
 }
 
 

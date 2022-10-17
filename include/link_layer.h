@@ -43,6 +43,7 @@ typedef struct
 #define FLAG 0x7E
 #define SET 0x03
 #define UA 0x07
+#define DISC 0x0B
 #define TRANSMITTER_COMMAND 0x03
 #define RECEIVER_REPLY 0x03
 #define RECEIVER_COMMAND 0x01
@@ -88,6 +89,6 @@ int llread(int fd, unsigned char * buffer);
 // Close previously opened connection.
 // if showStatistics == TRUE, link layer should print statistics in the console on close.
 // Return "1" on success or "-1" on error.
-int llclose(int fd, int showStatistics);
+int llclose(int fd, int showStatistics,LinkLayerRole ll);
 
 #endif // _LINK_LAYER_H_
