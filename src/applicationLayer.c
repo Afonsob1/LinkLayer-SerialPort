@@ -29,7 +29,7 @@ void sendPacket(int fd,unsigned char * buffer,unsigned char sequence_number, siz
     buffer[1] = sequence_number;
     buffer[2] = size/256;
     buffer[3] = size%256;
-    llwrite(fd,buffer,size+4);
+    if (llwrite(fd,buffer,size+4) == -1) exit(-1);
 }
 
 
@@ -72,7 +72,7 @@ void sendControl(int fd,unsigned char c,const char* file_name, unsigned long lon
     printf("writing\n");
 
     // sending control packet
-    llwrite(fd,control_packet,control_DATA_SIZE);
+    if(llwrite(fd,control_packet,control_DATA_SIZE)==-1) exit(0);
     printf("Finished writing\n");
     free(control_packet);
 }

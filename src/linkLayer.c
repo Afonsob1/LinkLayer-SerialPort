@@ -57,6 +57,7 @@ void send_disc(int fd){
     write(fd, su_buf, SU_BUF_SIZE);
 }
 
+int erro = 1;
 
 
 void send_data(int fd,char* buffer, int length){
@@ -94,16 +95,21 @@ void send_data(int fd,char* buffer, int length){
         frame[4 + length + numEsc] = ESC;
         numEsc++;
     }
+    if(erro % 5 == 0) 
+        BCC2 ^= 10;
+    erro++;
+
     frame[4 + length + numEsc] = BCC2; 
     frame[4 + length + numEsc + 1] = FLAG; 
 
 
     write(fd,frame,6 + 2*length);
     free(frame);
+    //sleep(1);
 }
 
 
-void receive_ACK(State * state, unsigned char * ack,unsigned char byte, int sn) {
+void receive_ACK(State * state,  char * ack,unsigned char byte, int sn) {
     unsigned char A = 0;
 
     switch(*state){
@@ -133,8 +139,9 @@ void receive_ACK(State * state, unsigned char * ack,unsigned char byte, int sn) 
                 *state = StateFLAG;
             else if(byte == ACK(sn)  && *ack == ACKN) 
                 *state = StateC;
-            else if (byte == NACK(sn) && *ack == NACKN) 
+            else if (byte == NACK(sn) && *ack == NACKN){
                 *state = StateC;
+            }
             else
                 *state = StateSTART;
             
@@ -168,7 +175,7 @@ void receive_ACK(State * state, unsigned char * ack,unsigned char byte, int sn) 
 int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
     unsigned char in_char;
-    unsigned char ack=FALSE;
+    char ack=FALSE;
     state = StateSTART;
 
 
@@ -492,7 +499,7 @@ void sendACK(int fd, bool reply){
 void sendNACK(int fd){
     printf("Send Nack\n");
     // write NACK
-    char C = NACK(ns);
+    char C = NACK((ns)?0:1);
     char ack[] = {FLAG,0x01,C,0x01^C,FLAG};
     write(fd, ack, SU_BUF_SIZE);
 }
