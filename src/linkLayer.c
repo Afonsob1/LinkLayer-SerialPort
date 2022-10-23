@@ -41,7 +41,6 @@ void send_set(int fd){
     write(fd, su_buf, SU_BUF_SIZE);
     printf("Sent set up frame\n");
     // Wait until all bytes have been written to the serial port
-    sleep(1);
 
 }
 
@@ -104,8 +103,7 @@ void send_data(int fd,char* buffer, int length){
 
 
 void receive_ACK(State * state, unsigned char * ack,unsigned char byte, int sn) {
-    unsigned char A = RECEIVER_REPLY;
-
+    unsigned char A = 0;
 
     switch(*state){
         case StateSTART:
@@ -116,27 +114,29 @@ void receive_ACK(State * state, unsigned char * ack,unsigned char byte, int sn) 
         case StateFLAG:
             if(byte == FLAG)
                 *state = StateFLAG;
-            else if(byte == A)
+            else if(byte == 0x03){
+                *ack=ACKN;
+                A = 0x03;
                 *state = StateA;
-            else
+            }else if(byte == 0x01){
+                A = 0x01;
+                *ack=NACKN;
+                *state = StateA;
+            }else{
                 *state = StateSTART;
-            
+            }
             break;
         case StateA:
 
             if(byte == FLAG)
                 *state = StateFLAG;
-            else if(byte == ACK(sn)) {
+            else if(byte == ACK(sn)  && *ack == ACKN) 
                 *state = StateC;
-                *ack=ACKN;
-            }
-            else if (byte == NACK(sn)) {
+            else if (byte == NACK(sn) && *ack == NACKN) 
                 *state = StateC;
-                *ack=NACKN;
-            }
-            else{
+            else
                 *state = StateSTART;
-            }
+            
             
             break;
         case StateC:
@@ -465,7 +465,7 @@ int llopen(LinkLayer connectionParameters){
         printf("Sent unnumbered acknowledgment frame\n");
 
         // Wait until all bytes have been written to the serial port
-        sleep(1);
+        
         printf("Connection established\n");
     }
     return fd;
@@ -488,7 +488,7 @@ void sendNACK(int fd){
     printf("Send Nack\n");
     // write NACK
     char C = NACK(ns);
-    char ack[] = {FLAG,0x03,C,0x03^C,FLAG};
+    char ack[] = {FLAG,0x01,C,0x01^C,FLAG};
     write(fd, ack, SU_BUF_SIZE);
 }
 
@@ -636,7 +636,6 @@ int llread(int fd, unsigned char * buffer){
     printf("\nReceive %d bytes \n", data_pos);
 
     // Wait until all bytes have been written to the serial port
-    sleep(1);
     return 0;
 
 }
