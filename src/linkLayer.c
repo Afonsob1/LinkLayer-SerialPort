@@ -16,6 +16,7 @@
 
 State state;
 
+LinkLayer linkLayer;
 
 volatile int STOP = FALSE;
 int alarm_enabled = FALSE;
@@ -173,12 +174,12 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
     alarm_enabled = FALSE;
     timeout_count = 0;
-    while (state != StateSTOP || ack==FALSE){
+    while ((state != StateSTOP || ack==FALSE) && timeout_count<linkLayer.nRetransmissions){
         if (alarm_enabled == FALSE)
         {
             (void)signal(SIGALRM, alarmHandler);
             send_data(fd,buffer,bufSize);
-            alarm(TIMEOUT_SECS); // Set alarm
+            alarm(linkLayer.timeout); // Set alarm
             alarm_enabled = TRUE;
         }
 
@@ -192,12 +193,15 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
     if(ack==ACKN){
         ns=(1-ns);
         printf("Received ACK \n");
-    }else{
-        //NACK
+    }else if(ack==NACKN){
         printf("Received NACK \n");
         llwrite(fd,buffer,bufSize);
-
     }
+    else{
+        printf("Max timeouts Exceeded!\n");
+        return -1;
+    }
+    return 0;
 }
 
 
@@ -359,14 +363,15 @@ int llopen(LinkLayer connectionParameters){
     // Open serial port device for reading and writing and not as controlling tty
     // because we don't want to get killed if linenoise sends CTRL-C.
     
+    memcpy(&linkLayer,&connectionParameters,sizeof(connectionParameters));
     state = StateSTART;
     ns = 0;
 
 
-    int fd = open(connectionParameters.serialPort, O_RDWR | O_NOCTTY);
+    int fd = open(linkLayer.serialPort, O_RDWR | O_NOCTTY);
     if (fd < 0)
     {
-        perror(connectionParameters.serialPort);
+        perror(linkLayer.serialPort);
         exit(-1);
     }
 
@@ -381,7 +386,7 @@ int llopen(LinkLayer connectionParameters){
     // Clear struct for new port settings
     memset(&newtio, 0, sizeof(newtio));
 
-    newtio.c_cflag = connectionParameters.baudRate | CS8 | CLOCAL | CREAD;
+    newtio.c_cflag = linkLayer.baudRate | CS8 | CLOCAL | CREAD;
     newtio.c_iflag = IGNPAR;
     newtio.c_oflag = 0;
 
@@ -413,20 +418,20 @@ int llopen(LinkLayer connectionParameters){
     unsigned char in_char;
     
 
-    if(connectionParameters.role == LlTx){
+    if(linkLayer.role == LlTx){
         (void)signal(SIGALRM, alarmHandler);
         (void)siginterrupt(SIGALRM,TRUE); //system call interrupted by alarm isn't restarted
         // Loop for input
         unsigned char in_char;
         
-        while (state != StateSTOP && timeout_count < connectionParameters.nRetransmissions)
+        while (state != StateSTOP && timeout_count < linkLayer.nRetransmissions)
         {
 
             if (alarm_enabled == FALSE)
             {
                 (void)signal(SIGALRM, alarmHandler);
                 send_set(fd);
-                alarm(connectionParameters.timeout); // Set alarm
+                alarm(linkLayer.timeout); // Set alarm
                 alarm_enabled = TRUE;
             }
 
@@ -438,7 +443,7 @@ int llopen(LinkLayer connectionParameters){
 
         alarm(0);
 
-        if(timeout_count == connectionParameters.nRetransmissions){
+        if(timeout_count == linkLayer.nRetransmissions){
             printf("Max timeouts exceeded\n");
             return -1;
         }
@@ -642,18 +647,19 @@ int llread(int fd, unsigned char * buffer){
 }
 
 int llclose(int fd, int showStatistics, LinkLayerRole ll){
+    int ret=0;
     char in_char;
     state=StateSTART;
     if(ll==LlTx){
         alarm_enabled = FALSE;
         timeout_count = 0;
-        while (state != StateSTOP){
+        while (state != StateSTOP && timeout_count < linkLayer.nRetransmissions){
             if (alarm_enabled == FALSE)
                 {
                     (void)signal(SIGALRM, alarmHandler);
                     printf("Sending DISC\n");
                     send_disc(fd);
-                    alarm(TIMEOUT_SECS); // Set alarm
+                    alarm(linkLayer.timeout); // Set alarm
                     alarm_enabled = TRUE;
                 }
             // Returns after 1 chars has been input
@@ -661,9 +667,15 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
             receive_disc(&state,in_char);
         }
         alarm(0); //  alarm
-        printf("Received DISC\n");
-        send_UA(fd);
-        printf("Sending UA\n");
+        if(state!=StateSTOP){
+            printf("Max timeouts Exceeded!\n");
+            ret=-1;
+        }
+        else{
+            printf("Received DISC\n");
+            send_UA(fd);
+            printf("Sending UA\n");
+        }
     }
     else{
         alarm_enabled = FALSE;
@@ -678,19 +690,25 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
         state=StateSTART;
         timeout_count = 0;
         while (state != StateSTOP){
-            if (alarm_enabled == FALSE)
+            if (alarm_enabled == FALSE && timeout_count < linkLayer.nRetransmissions)
                 {
                     (void)signal(SIGALRM, alarmHandler);
                     send_disc(fd);
                     printf("Sending DISC\n");
-                    alarm(TIMEOUT_SECS); // Set alarm
+                    alarm(linkLayer.timeout); // Set alarm
                     alarm_enabled = TRUE;
                 }
             // Returns after 1 chars has been input
             read(fd, &in_char, 1);        
             receive_UA(&state,in_char);
         }
-        printf("Received UA\n"); 
+        if(state!=StateSTOP){
+            printf("Max timeouts Exceeded!\n");
+            ret=-1;
+        }
+        else{
+            printf("Received UA\n"); 
+        }
         alarm(0); //  alarm
     }
 
@@ -703,5 +721,5 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
 
     close(fd);
 
-    return 0;
+    return ret;
 }
