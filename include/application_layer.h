@@ -25,7 +25,6 @@
 
 
 #define MAX_FILENAME_SIZE 1024
-#define DATA_SIZE 1024
 /*
 A aplicação deve ser capaz de chamar as funções: 
 - llopen() - llread() - llwrite() - llclose()
