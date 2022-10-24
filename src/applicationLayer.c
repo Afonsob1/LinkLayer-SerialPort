@@ -184,8 +184,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     if(appLayer.status==RECEIVER){   
         printf("Receiver\n");    
         StateReceive stateReceive = StateReceiveDEFAULT;
-        char* start_file_name[MAX_FILENAME_SIZE];
-        char* end_file_name[MAX_FILENAME_SIZE];
+        char start_file_name[MAX_FILENAME_SIZE];
+        char end_file_name[MAX_FILENAME_SIZE];
         unsigned long long start_file_size,end_file_size;
         unsigned int data_size;
         FILE* file;
@@ -201,7 +201,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
                     if(file==NULL){
                         printf("Error opening file %s\n",filename);
-                        return -1;
+                        return;
                     }else{
                         printf("Criou ficheiro\n");    
                     }
