@@ -102,12 +102,13 @@ void send_data(int fd,char* buffer, int length){
 
     write(fd,frame,6 + 2*length);
     free(frame);
-    //sleep(1);
+    sleep(1);
 }
 
+unsigned char A = 0;
 
 void receive_ACK(State * state,  char * ack,unsigned char byte, int sn) {
-    unsigned char A = 0;
+    
 
     switch(*state){
         case StateSTART:
@@ -145,11 +146,13 @@ void receive_ACK(State * state,  char * ack,unsigned char byte, int sn) {
             
             break;
         case StateC:
+            printf("%x %x\n", byte, A);
+
             if(byte == FLAG){
                 *state = StateFLAG;
                 *ack=FALSE;
             }
-            else if(byte == A^(*ack==ACKN?ACK(sn):NACK(sn)))
+            else if(byte == (A^(*ack==ACKN?ACK(sn):NACK(sn))))
                 *state = StateBCC1;
             else{
                 *state = StateSTART;
@@ -483,7 +486,7 @@ int llopen(LinkLayer connectionParameters){
 void sendACK(int fd, bool reply){
     printf("Send ack\n");
     // write ACK
-    char C = ACK( (ns)?0:1);
+    char C = ACK( (1-ns));
 
     if(reply){
         C = ACK(ns);
@@ -506,10 +509,8 @@ int llread(int fd, unsigned char * buffer){
     unsigned char A = TRANSMITTER_COMMAND;
 
     unsigned char C_new = CONTROL(ns);
-    unsigned char bcc1 = A^C_new;
 
     unsigned char C_old = CONTROL((ns==0)?1:0);
-    unsigned char bcc1_old = A^C_old;
 
     bool is_stuffing = false;
     bool is_error = false;
