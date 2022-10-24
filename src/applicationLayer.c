@@ -178,8 +178,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     }
 
     char sequence_number = 0;
-    unsigned int data_packet_size = DATA_SIZE + 4;
-    unsigned char* buffer = (unsigned char*) malloc(MAX_PAYLOAD_SIZE);
+    unsigned char* buffer = (unsigned char*) malloc(MAX_PAYLOAD_SIZE*2);
 
 
     if(appLayer.status==RECEIVER){   
@@ -255,7 +254,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         
         printf("sendControl\n");
         size_t bytes_read = 0;
-        while((bytes_read=fread(buffer+4, 1,MAX_PAYLOAD_SIZE-100,file)) != 0){
+        while((bytes_read=fread(buffer+4, 1,MAX_PAYLOAD_SIZE-10,file)) != 0){
             printf("sending packet\n");
             sendPacket(appLayer.fileDescriptor,buffer,sequence_number,bytes_read);
             sequence_number++;
@@ -266,7 +265,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     free(buffer);
     llclose(appLayer.fileDescriptor,0,llRole); 
 }
-
 
 
 
