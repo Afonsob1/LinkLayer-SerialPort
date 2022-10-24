@@ -57,7 +57,6 @@ void send_disc(int fd){
     write(fd, su_buf, SU_BUF_SIZE);
 }
 
-int erro = 1;
 
 
 void send_data(int fd,char* buffer, int length){
@@ -95,9 +94,7 @@ void send_data(int fd,char* buffer, int length){
         frame[4 + length + numEsc] = ESC;
         numEsc++;
     }
-    if(erro % 5 == 0) 
-        BCC2 ^= 10;
-    erro++;
+
 
     frame[4 + length + numEsc] = BCC2; 
     frame[4 + length + numEsc + 1] = FLAG; 
@@ -169,7 +166,7 @@ void receive_ACK(State * state,  char * ack,unsigned char byte, int sn) {
             }
             break;
     }
-
+    
 }
 
 int llwrite(int fd, const unsigned char *buffer, int bufSize) {
@@ -645,7 +642,7 @@ int llread(int fd, unsigned char * buffer){
 
     buffer[data_pos-1] = 0;
 
-    printf("\nReceive %d bytes \n", data_pos);
+    printf("\nReceive %d bytes \n", data_pos-1);
 
     // Wait until all bytes have been written to the serial port
     return 0;
@@ -709,7 +706,7 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
             receive_UA(&state,in_char);
         }
         if(state!=StateSTOP){
-            printf("Max timeouts Exceeded!\n");
+            printf("Max timeouts Exceedefd!\n");
             ret=-1;
         }
         else{
