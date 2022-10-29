@@ -105,61 +105,61 @@ void send_data(int fd,char* buffer, int length){
 
 unsigned char A = 0;
 
-void receive_ACK(U_C_State * state,  char * ack,unsigned char byte, int sn) {
+void receive_ACK(U_S_State * state,  char * ack,unsigned char byte, int sn) {
     
 
     switch(*state){
-        case U_C_StateSTART:
+        case U_S_StateSTART:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             break;
-        case U_C_StateFLAG:
+        case U_S_StateFLAG:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == 0x03){
                 *ack=ACKN;
                 A = 0x03;
-                *state = U_C_StateA;
+                *state = U_S_StateA;
             }else if(byte == 0x01){
                 A = 0x01;
                 *ack=NACKN;
-                *state = U_C_StateA;
+                *state = U_S_StateA;
             }else{
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             }
             break;
-        case U_C_StateA:
+        case U_S_StateA:
 
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == ACK(sn)  && *ack == ACKN) 
-                *state = U_C_StateC;
+                *state = U_S_StateC;
             else if (byte == NACK(sn) && *ack == NACKN){
-                *state = U_C_StateC;
+                *state = U_S_StateC;
             }
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             break;
-        case U_C_StateC:
+        case U_S_StateC:
             printf("%x %x\n", byte, A);
 
             if(byte == FLAG){
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
                 *ack=FALSE;
             }
             else if(byte == (A^(*ack==ACKN?ACK(sn):NACK(sn))))
-                *state = U_C_StateBCC1;
+                *state = U_S_StateBCC1;
             else{
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
                 *ack=FALSE;
             }
             break;
             
-        case U_C_StateBCC1:
+        case U_S_StateBCC1:
             if(byte == FLAG)
-                *state = U_C_StateSTOP;
+                *state = U_S_StateSTOP;
             else{
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
                 *ack=FALSE;
             }
             break;
@@ -171,18 +171,18 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
     unsigned char in_char;
     char ack=FALSE;
-    U_C_State state = U_C_StateSTART;
+    U_S_State state = U_S_StateSTART;
 
 
     alarm_enabled = FALSE;
     timeout_count = 0;
-    while ((state != U_C_StateSTOP || ack==FALSE) && timeout_count<linkLayer.nRetransmissions){
+    while ((state != U_S_StateSTOP || ack==FALSE) && timeout_count<linkLayer.nRetransmissions){
         if (alarm_enabled == FALSE)
         {
             (void)signal(SIGALRM, alarmHandler);
             send_data(fd,buffer,bufSize);
             alarm(linkLayer.timeout); // Set alarm
-            state = U_C_StateSTART;
+            state = U_S_StateSTART;
             alarm_enabled = TRUE;
         }
 
@@ -209,99 +209,99 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
 
 
-void receive_UA(U_C_State * state, unsigned char byte){
+void receive_UA(U_S_State * state, unsigned char byte){
     
     unsigned char A = RECEIVER_REPLY;
     unsigned char C = UA;
     
     switch(*state){
-        case U_C_StateSTART:
+        case U_S_StateSTART:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             
             break;
-        case U_C_StateFLAG:
+        case U_S_StateFLAG:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == A)
-                *state = U_C_StateA;
+                *state = U_S_StateA;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
-        case U_C_StateA:
+        case U_S_StateA:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == C)
-                *state = U_C_StateC;
+                *state = U_S_StateC;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
-        case U_C_StateC:
+        case U_S_StateC:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == (A^C))
-                *state = U_C_StateBCC1;
+                *state = U_S_StateBCC1;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
             
-        case U_C_StateBCC1:
+        case U_S_StateBCC1:
             if(byte == FLAG)
-                *state = U_C_StateSTOP;
+                *state = U_S_StateSTOP;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
     }
 
 }
 
-void receive_disc(U_C_State * state, unsigned char byte){
+void receive_disc(U_S_State * state, unsigned char byte){
     
     unsigned char A = RECEIVER_REPLY;
     unsigned char C = DISC;
     
     switch(*state){
-        case U_C_StateSTART:
+        case U_S_StateSTART:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             break;
-        case U_C_StateFLAG:
+        case U_S_StateFLAG:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == A)
-                *state = U_C_StateA;
+                *state = U_S_StateA;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
-        case U_C_StateA:
+        case U_S_StateA:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == C)
-                *state = U_C_StateC;
+                *state = U_S_StateC;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
-        case U_C_StateC:
+        case U_S_StateC:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == (A^C))
-                *state = U_C_StateBCC1;
+                *state = U_S_StateBCC1;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
             
-        case U_C_StateBCC1:
+        case U_S_StateBCC1:
             if(byte == FLAG)
-                *state = U_C_StateSTOP;
+                *state = U_S_StateSTOP;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
     }
@@ -312,50 +312,50 @@ void receive_disc(U_C_State * state, unsigned char byte){
 
 
 
-void receive_set(U_C_State * state, unsigned char byte){
+void receive_set(U_S_State * state, unsigned char byte){
     
     unsigned char A = TRANSMITTER_COMMAND;
     unsigned char C = SET;
     
     switch(*state){
-        case U_C_StateSTART:
+        case U_S_StateSTART:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             
             break;
-        case U_C_StateFLAG:
+        case U_S_StateFLAG:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == A)
-                *state = U_C_StateA;
+                *state = U_S_StateA;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
-        case U_C_StateA:
+        case U_S_StateA:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == C)
-                *state = U_C_StateC;
+                *state = U_S_StateC;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
-        case U_C_StateC:
+        case U_S_StateC:
             if(byte == FLAG)
-                *state = U_C_StateFLAG;
+                *state = U_S_StateFLAG;
             else if(byte == (A^C))
-                *state = U_C_StateBCC1;
+                *state = U_S_StateBCC1;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
             
-        case U_C_StateBCC1:
+        case U_S_StateBCC1:
             if(byte == FLAG)
-                *state = U_C_StateSTOP;
+                *state = U_S_StateSTOP;
             else
-                *state = U_C_StateSTART;
+                *state = U_S_StateSTART;
             
             break;
     }
@@ -367,7 +367,7 @@ int llopen(LinkLayer connectionParameters){
     // because we don't want to get killed if linenoise sends CTRL-C.
     
     memcpy(&linkLayer,&connectionParameters,sizeof(connectionParameters));
-    U_C_State state = U_C_StateSTART;
+    U_S_State state = U_S_StateSTART;
     ns = 0;
 
 
@@ -427,7 +427,7 @@ int llopen(LinkLayer connectionParameters){
         // Loop for input
         unsigned char in_char;
         
-        while (state != U_C_StateSTOP && timeout_count < linkLayer.nRetransmissions)
+        while (state != U_S_StateSTOP && timeout_count < linkLayer.nRetransmissions)
         {
 
             if (alarm_enabled == FALSE)
@@ -435,7 +435,7 @@ int llopen(LinkLayer connectionParameters){
                 (void)signal(SIGALRM, alarmHandler);
                 send_set(fd);
                 alarm(linkLayer.timeout); // Set alarm
-                state = U_C_StateSTART;
+                state = U_S_StateSTART;
                 alarm_enabled = TRUE;
             }
 
@@ -458,7 +458,7 @@ int llopen(LinkLayer connectionParameters){
 
     }else{
 
-        while (state != U_C_StateSTOP)
+        while (state != U_S_StateSTOP)
         {
             // Returns after 1 chars has been input
             read(fd, &in_char, 1);        
@@ -649,18 +649,18 @@ int llread(int fd, unsigned char * buffer){
 int llclose(int fd, int showStatistics, LinkLayerRole ll){
     int ret=0;
     char in_char;
-    U_C_State state = U_C_StateSTART;
+    U_S_State state = U_S_StateSTART;
     if(ll==LlTx){
         alarm_enabled = FALSE;
         timeout_count = 0;
-        while (state != U_C_StateSTOP && timeout_count < linkLayer.nRetransmissions){
+        while (state != U_S_StateSTOP && timeout_count < linkLayer.nRetransmissions){
             if (alarm_enabled == FALSE)
                 {
                     (void)signal(SIGALRM, alarmHandler);
                     printf("Sending DISC\n");
                     send_disc(fd);
                     alarm(linkLayer.timeout); // Set alarm
-                    state = U_C_StateSTART;
+                    state = U_S_StateSTART;
                     alarm_enabled = TRUE;
                 }
             // Returns after 1 chars has been input
@@ -668,7 +668,7 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
             receive_disc(&state,in_char);
         }
         alarm(0); //  alarm
-        if(state!=U_C_StateSTOP){
+        if(state!=U_S_StateSTOP){
             printf("Max timeouts Exceeded!\n");
             ret=-1;
         }
@@ -681,30 +681,30 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
     else{
         alarm_enabled = FALSE;
         timeout_count = 0;
-        while (state != U_C_StateSTOP){
+        while (state != U_S_StateSTOP){
             read(fd, &in_char, 1);        
             receive_disc(&state,in_char);
         }
         printf("Received DISC\n");
         alarm(0); //  alarm
         alarm_enabled = FALSE;
-        state=U_C_StateSTART;
+        state=U_S_StateSTART;
         timeout_count = 0;
-        while (state != U_C_StateSTOP){
+        while (state != U_S_StateSTOP){
             if (alarm_enabled == FALSE && timeout_count < linkLayer.nRetransmissions)
                 {
                     (void)signal(SIGALRM, alarmHandler);
                     send_disc(fd);
                     printf("Sending DISC\n");
                     alarm(linkLayer.timeout); // Set alarm
-                    state = U_C_StateSTART;
+                    state = U_S_StateSTART;
                     alarm_enabled = TRUE;
                 }
             // Returns after 1 chars has been input
             read(fd, &in_char, 1);        
             receive_UA(&state,in_char);
         }
-        if(state!=U_C_StateSTOP){
+        if(state!=U_S_StateSTOP){
             printf("Max timeouts Exceedefd!\n");
             ret=-1;
         }
