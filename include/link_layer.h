@@ -63,15 +63,24 @@ typedef struct
 
 
 typedef enum{
-    StateSTART,
-    StateFLAG,
-    StateA,
-    StateC,
-    StateBCC1,
-    StateCReply,
-    StateReplyData,
-    StateSTOP
-} State;
+    U_C_StateSTART,
+    U_C_StateFLAG,
+    U_C_StateA,
+    U_C_StateC,
+    U_C_StateBCC1,
+    U_C_StateSTOP
+} U_C_State;
+
+typedef enum{
+    IStateSTART,
+    IStateFLAG,
+    IStateA,
+    IStateC,
+    IStateBCC1,
+    IStateCReply,
+    IStateReplyData,
+    IStateSTOP
+} IState;
 
 
 // Open a connection using the "port" parameters defined in struct linkLayer.

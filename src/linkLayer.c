@@ -14,7 +14,6 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-State state;
 
 LinkLayer linkLayer;
 
@@ -30,7 +29,6 @@ unsigned int ns = 0;
 void alarmHandler(int signal)
 {
     alarm_enabled = FALSE;
-    state = StateSTART;
     timeout_count++;
     printf("Timeout #%d\n", timeout_count);
 }
@@ -102,69 +100,66 @@ void send_data(int fd,char* buffer, int length){
 
     write(fd,frame,6 + 2*length);
     free(frame);
-    sleep(1);
+    //sleep(1);
 }
 
 unsigned char A = 0;
 
-void receive_ACK(State * state,  char * ack,unsigned char byte, int sn) {
+void receive_ACK(U_C_State * state,  char * ack,unsigned char byte, int sn) {
     
 
     switch(*state){
-        case StateSTART:
+        case U_C_StateSTART:
             if(byte == FLAG)
-                *state = StateFLAG;
-
+                *state = U_C_StateFLAG;
             break;
-        case StateFLAG:
+        case U_C_StateFLAG:
             if(byte == FLAG)
-                *state = StateFLAG;
+                *state = U_C_StateFLAG;
             else if(byte == 0x03){
                 *ack=ACKN;
                 A = 0x03;
-                *state = StateA;
+                *state = U_C_StateA;
             }else if(byte == 0x01){
                 A = 0x01;
                 *ack=NACKN;
-                *state = StateA;
+                *state = U_C_StateA;
             }else{
-                *state = StateSTART;
+                *state = U_C_StateSTART;
             }
             break;
-        case StateA:
+        case U_C_StateA:
 
             if(byte == FLAG)
-                *state = StateFLAG;
+                *state = U_C_StateFLAG;
             else if(byte == ACK(sn)  && *ack == ACKN) 
-                *state = StateC;
+                *state = U_C_StateC;
             else if (byte == NACK(sn) && *ack == NACKN){
-                *state = StateC;
+                *state = U_C_StateC;
             }
             else
-                *state = StateSTART;
-            
-            
+                *state = U_C_StateSTART;
             break;
-        case StateC:
+        case U_C_StateC:
             printf("%x %x\n", byte, A);
 
             if(byte == FLAG){
-                *state = StateFLAG;
+                *state = U_C_StateFLAG;
                 *ack=FALSE;
             }
             else if(byte == (A^(*ack==ACKN?ACK(sn):NACK(sn))))
-                *state = StateBCC1;
+                *state = U_C_StateBCC1;
             else{
-                *state = StateSTART;
+                *state = U_C_StateSTART;
                 *ack=FALSE;
             }
             break;
             
-        case StateBCC1:
+        case U_C_StateBCC1:
             if(byte == FLAG)
-                *state = StateSTOP;
+                *state = U_C_StateSTOP;
             else{
-                *state = StateSTART;
+                *state = U_C_StateSTART;
                 *ack=FALSE;
             }
             break;
@@ -176,17 +171,18 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
     unsigned char in_char;
     char ack=FALSE;
-    state = StateSTART;
+    U_C_State state = U_C_StateSTART;
 
 
     alarm_enabled = FALSE;
     timeout_count = 0;
-    while ((state != StateSTOP || ack==FALSE) && timeout_count<linkLayer.nRetransmissions){
+    while ((state != U_C_StateSTOP || ack==FALSE) && timeout_count<linkLayer.nRetransmissions){
         if (alarm_enabled == FALSE)
         {
             (void)signal(SIGALRM, alarmHandler);
             send_data(fd,buffer,bufSize);
             alarm(linkLayer.timeout); // Set alarm
+            state = U_C_StateSTART;
             alarm_enabled = TRUE;
         }
 
@@ -213,101 +209,101 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
 
 
-void receive_UA(State * state, unsigned char byte){
+void receive_UA(U_C_State * state, unsigned char byte){
     
     unsigned char A = RECEIVER_REPLY;
     unsigned char C = UA;
     
     switch(*state){
-    case StateSTART:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        
-        break;
-    case StateFLAG:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == A)
-            *state = StateA;
-        else
-            *state = StateSTART;
-        
-        break;
-    case StateA:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == C)
-            *state = StateC;
-        else
-            *state = StateSTART;
-        
-        break;
-    case StateC:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == (A^C))
-            *state = StateBCC1;
-        else
-            *state = StateSTART;
-        
-        break;
-        
-    case StateBCC1:
-        if(byte == FLAG)
-            *state = StateSTOP;
-        else
-            *state = StateSTART;
-        
-        break;
+        case U_C_StateSTART:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            
+            break;
+        case U_C_StateFLAG:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == A)
+                *state = U_C_StateA;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+        case U_C_StateA:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == C)
+                *state = U_C_StateC;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+        case U_C_StateC:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == (A^C))
+                *state = U_C_StateBCC1;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+            
+        case U_C_StateBCC1:
+            if(byte == FLAG)
+                *state = U_C_StateSTOP;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
     }
 
 }
 
-void receive_disc(State * state, unsigned char byte){
+void receive_disc(U_C_State * state, unsigned char byte){
     
     unsigned char A = RECEIVER_REPLY;
     unsigned char C = DISC;
     
     switch(*state){
-    case StateSTART:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        break;
-    case StateFLAG:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == A)
-            *state = StateA;
-        else
-            *state = StateSTART;
-        
-        break;
-    case StateA:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == C)
-            *state = StateC;
-        else
-            *state = StateSTART;
-        
-        break;
-    case StateC:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == (A^C))
-            *state = StateBCC1;
-        else
-            *state = StateSTART;
-        
-        break;
-        
-    case StateBCC1:
-        if(byte == FLAG)
-            *state = StateSTOP;
-        else
-            *state = StateSTART;
-        
-        break;
+        case U_C_StateSTART:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            break;
+        case U_C_StateFLAG:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == A)
+                *state = U_C_StateA;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+        case U_C_StateA:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == C)
+                *state = U_C_StateC;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+        case U_C_StateC:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == (A^C))
+                *state = U_C_StateBCC1;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+            
+        case U_C_StateBCC1:
+            if(byte == FLAG)
+                *state = U_C_StateSTOP;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
     }
 
 }
@@ -316,52 +312,52 @@ void receive_disc(State * state, unsigned char byte){
 
 
 
-void receive_set(State * state, unsigned char byte){
+void receive_set(U_C_State * state, unsigned char byte){
     
     unsigned char A = TRANSMITTER_COMMAND;
     unsigned char C = SET;
     
     switch(*state){
-    case StateSTART:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        
-        break;
-    case StateFLAG:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == A)
-            *state = StateA;
-        else
-            *state = StateSTART;
-        
-        break;
-    case StateA:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == C)
-            *state = StateC;
-        else
-            *state = StateSTART;
-        
-        break;
-    case StateC:
-        if(byte == FLAG)
-            *state = StateFLAG;
-        else if(byte == (A^C))
-            *state = StateBCC1;
-        else
-            *state = StateSTART;
-        
-        break;
-        
-    case StateBCC1:
-        if(byte == FLAG)
-            *state = StateSTOP;
-        else
-            *state = StateSTART;
-        
-        break;
+        case U_C_StateSTART:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            
+            break;
+        case U_C_StateFLAG:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == A)
+                *state = U_C_StateA;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+        case U_C_StateA:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == C)
+                *state = U_C_StateC;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+        case U_C_StateC:
+            if(byte == FLAG)
+                *state = U_C_StateFLAG;
+            else if(byte == (A^C))
+                *state = U_C_StateBCC1;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
+            
+        case U_C_StateBCC1:
+            if(byte == FLAG)
+                *state = U_C_StateSTOP;
+            else
+                *state = U_C_StateSTART;
+            
+            break;
     }
 
 }
@@ -371,7 +367,7 @@ int llopen(LinkLayer connectionParameters){
     // because we don't want to get killed if linenoise sends CTRL-C.
     
     memcpy(&linkLayer,&connectionParameters,sizeof(connectionParameters));
-    state = StateSTART;
+    U_C_State state = U_C_StateSTART;
     ns = 0;
 
 
@@ -431,7 +427,7 @@ int llopen(LinkLayer connectionParameters){
         // Loop for input
         unsigned char in_char;
         
-        while (state != StateSTOP && timeout_count < linkLayer.nRetransmissions)
+        while (state != U_C_StateSTOP && timeout_count < linkLayer.nRetransmissions)
         {
 
             if (alarm_enabled == FALSE)
@@ -439,6 +435,7 @@ int llopen(LinkLayer connectionParameters){
                 (void)signal(SIGALRM, alarmHandler);
                 send_set(fd);
                 alarm(linkLayer.timeout); // Set alarm
+                state = U_C_StateSTART;
                 alarm_enabled = TRUE;
             }
 
@@ -461,7 +458,7 @@ int llopen(LinkLayer connectionParameters){
 
     }else{
 
-        while (state != StateSTOP)
+        while (state != U_C_StateSTOP)
         {
             // Returns after 1 chars has been input
             read(fd, &in_char, 1);        
@@ -522,107 +519,106 @@ int llread(int fd, unsigned char * buffer){
 
     // read mensage
 
-    state = StateSTART;
+    IState state = IStateSTART;
 
-    while(state!=StateSTOP){
+    while(state!=IStateSTOP){
         char byte;
         read(fd, &byte, 1);  
 
         switch(state){
-        case StateSTART:
-            if(byte == FLAG)
-                state = StateFLAG;
-            
-            break;
-        case StateFLAG:
-            if(byte == FLAG)
-                state = StateFLAG;
-            else if(byte == A)
-                state = StateA;
-            else
-                state = StateSTART;
-            
-            break;
-        case StateA:
-
-            if(byte == FLAG)
-                state = StateFLAG;
-            else if(byte == C_new){
-                state = StateC;
-                reply = false;
-            }else if(byte == C_old){
-                state = StateCReply;
-                reply = true;
-            }else
-                state = StateSTART;
-            
-            break;
-        case StateC:
-            if(byte == FLAG)
-                state = StateFLAG;
-            else if(byte == (A^C_new))
-                state = StateBCC1;
-            else
-                state = StateSTART;
-            
-            break;
-        case StateCReply:
-            if(byte == FLAG)
-                state = StateFLAG;
-            else if(byte == (A^C_old))
-                state = StateReplyData;
-            else
-                state = StateSTART;
-            
-            break;
-        case StateReplyData:
-            // fazer byte stuffing
-            //printf("Reply \n");
-            
-            if(!is_stuffing && byte == FLAG){
-
-
-                state = StateSTOP;
-            }
-            if(!is_stuffing && byte == STUFFING){
-                is_stuffing = true;
-            }else{
-                is_stuffing = false;
-            }
-            
-            break;
-        case StateBCC1:
-            // fazer byte stuffing
-            
-            if(!is_stuffing && byte == FLAG){
-                state = StateSTOP;
-                bcc2 ^= buffer[data_pos-1]; // antes tinha se feito xor com o bcc2 (enviado), agr faz-se outra vez para reverter esse xor 
-
-                if(buffer[data_pos-1] !=bcc2){
-                    is_error = true;        // send NACK
-                }else{
-                    is_error = false;       // send ACK
-                }
-
+            case IStateSTART:
+                if(byte == FLAG)
+                    state = IStateFLAG;
+                
                 break;
-            }
+            case IStateFLAG:
+                if(byte == FLAG)
+                    state = IStateFLAG;
+                else if(byte == A)
+                    state = IStateA;
+                else
+                    state = IStateSTART;
+                
+                break;
+            case IStateA:
+
+                if(byte == FLAG)
+                    state = IStateFLAG;
+                else if(byte == C_new){
+                    state = IStateC;
+                    reply = false;
+                }else if(byte == C_old){
+                    state = IStateCReply;
+                    reply = true;
+                }else
+                    state = IStateSTART;
+                
+                break;
+            case IStateC:
+                if(byte == FLAG)
+                    state = IStateFLAG;
+                else if(byte == (A^C_new))
+                    state = IStateBCC1;
+                else
+                    state = IStateSTART;
+                
+                break;
+            case IStateCReply:
+                if(byte == FLAG)
+                    state = IStateFLAG;
+                else if(byte == (A^C_old))
+                    state = IStateReplyData;
+                else
+                    state = IStateSTART;
+                
+                break;
+            case IStateReplyData:
+                // fazer byte stuffing
+                //printf("Reply \n");
+                
+                if(!is_stuffing && byte == FLAG){
 
 
-            if(!is_stuffing && byte == STUFFING){
-                is_stuffing = true;
-            }else{
-                if(data_pos>=MAX_PAYLOAD_SIZE){
-                    is_error = true;        // sendNACK
-                    state = StateSTOP;
-                }else{
-                    bcc2 ^= byte;
-                    buffer[data_pos++] = byte;
+                    state = IStateSTOP;
                 }
-                is_stuffing = false;
-            }   
-            break;
-        }
-        
+                if(!is_stuffing && byte == STUFFING){
+                    is_stuffing = true;
+                }else{
+                    is_stuffing = false;
+                }
+                
+                break;
+            case IStateBCC1:
+                // fazer byte stuffing
+                
+                if(!is_stuffing && byte == FLAG){
+                    state = IStateSTOP;
+                    bcc2 ^= buffer[data_pos-1]; // antes tinha se feito xor com o bcc2 (enviado), agr faz-se outra vez para reverter esse xor 
+
+                    if(buffer[data_pos-1] !=bcc2){
+                        is_error = true;        // send NACK
+                    }else{
+                        is_error = false;       // send ACK
+                    }
+
+                    break;
+                }
+
+
+                if(!is_stuffing && byte == STUFFING){
+                    is_stuffing = true;
+                }else{
+                    if(data_pos>=MAX_PAYLOAD_SIZE){
+                        is_error = true;        // sendNACK
+                        state = IStateSTOP;
+                    }else{
+                        bcc2 ^= byte;
+                        buffer[data_pos++] = byte;
+                    }
+                    is_stuffing = false;
+                }   
+                break;
+        }  
     }
 
     if(is_error){
@@ -653,17 +649,18 @@ int llread(int fd, unsigned char * buffer){
 int llclose(int fd, int showStatistics, LinkLayerRole ll){
     int ret=0;
     char in_char;
-    state=StateSTART;
+    U_C_State state = U_C_StateSTART;
     if(ll==LlTx){
         alarm_enabled = FALSE;
         timeout_count = 0;
-        while (state != StateSTOP && timeout_count < linkLayer.nRetransmissions){
+        while (state != U_C_StateSTOP && timeout_count < linkLayer.nRetransmissions){
             if (alarm_enabled == FALSE)
                 {
                     (void)signal(SIGALRM, alarmHandler);
                     printf("Sending DISC\n");
                     send_disc(fd);
                     alarm(linkLayer.timeout); // Set alarm
+                    state = U_C_StateSTART;
                     alarm_enabled = TRUE;
                 }
             // Returns after 1 chars has been input
@@ -671,7 +668,7 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
             receive_disc(&state,in_char);
         }
         alarm(0); //  alarm
-        if(state!=StateSTOP){
+        if(state!=U_C_StateSTOP){
             printf("Max timeouts Exceeded!\n");
             ret=-1;
         }
@@ -684,29 +681,30 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
     else{
         alarm_enabled = FALSE;
         timeout_count = 0;
-        while (state != StateSTOP){
+        while (state != U_C_StateSTOP){
             read(fd, &in_char, 1);        
             receive_disc(&state,in_char);
         }
         printf("Received DISC\n");
         alarm(0); //  alarm
         alarm_enabled = FALSE;
-        state=StateSTART;
+        state=U_C_StateSTART;
         timeout_count = 0;
-        while (state != StateSTOP){
+        while (state != U_C_StateSTOP){
             if (alarm_enabled == FALSE && timeout_count < linkLayer.nRetransmissions)
                 {
                     (void)signal(SIGALRM, alarmHandler);
                     send_disc(fd);
                     printf("Sending DISC\n");
                     alarm(linkLayer.timeout); // Set alarm
+                    state = U_C_StateSTART;
                     alarm_enabled = TRUE;
                 }
             // Returns after 1 chars has been input
             read(fd, &in_char, 1);        
             receive_UA(&state,in_char);
         }
-        if(state!=StateSTOP){
+        if(state!=U_C_StateSTOP){
             printf("Max timeouts Exceedefd!\n");
             ret=-1;
         }
