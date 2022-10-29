@@ -62,15 +62,17 @@ typedef struct
 #define NACK(n)  ((n) << 7 | 0x01)
 
 
+/*Unumbered and Supervions frames State Machine  */
 typedef enum{
-    U_C_StateSTART,
-    U_C_StateFLAG,
-    U_C_StateA,
-    U_C_StateC,
-    U_C_StateBCC1,
-    U_C_StateSTOP
-} U_C_State;
+    U_S_StateSTART,
+    U_S_StateFLAG,
+    U_S_StateA,
+    U_S_StateC,
+    U_S_StateBCC1,
+    U_S_StateSTOP
+} U_S_State;
 
+/*Information Frame State Machine*/
 typedef enum{
     IStateSTART,
     IStateFLAG,
