@@ -62,6 +62,7 @@ typedef struct
 #define NACK(n)  ((n) << 7 | 0x01)
 
 
+/*Unumbered and Supervions frames State Machine  */
 typedef enum{
     U_S_StateSTART,
     U_S_StateFLAG,
@@ -71,6 +72,7 @@ typedef enum{
     U_S_StateSTOP
 } U_S_State;
 
+/*Information Frame State Machine*/
 typedef enum{
     IStateSTART,
     IStateFLAG,

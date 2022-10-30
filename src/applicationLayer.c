@@ -105,9 +105,10 @@ void read_control_packet(StateReceive*StateReceive,unsigned char *buffer,unsigne
 
     
     unsigned int file_name_size = buffer[second_parameter_offset+1];
-    printf("%d  %d\n", file_name_size, second_parameter_offset);
+    printf("%d  %ld\n", file_name_size, second_parameter_offset);
     
-    strncpy(file_name,buffer+second_parameter_offset+2,file_name_size);
+    second_parameter_offset += 2;
+    strncpy(file_name,buffer+second_parameter_offset,file_name_size);
     
     printf("STRCPY \n");
 }
@@ -141,6 +142,8 @@ void receiveFile(StateReceive * stateReceive,int fd,unsigned char * buffer){
                 break;
             else
                 *stateReceive=StateReceiveERROR;
+            break;
+        default:
             break;
     }
     printf("State %d\n",*stateReceive);
@@ -222,11 +225,13 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
                     read_control_packet(&stateReceive,buffer,&end_file_size,end_file_name);
                     printf("COMPARACOES INICIO\n");
                     if(start_file_size != end_file_size)
-                        printf("Error getting file size %d %d\n",start_file_size,end_file_size);
+                        printf("Error getting file size %lld %lld\n",start_file_size,end_file_size);
                     if(strcmp(start_file_name,end_file_name) != 0)
                         printf("Error getting file name\n");
 
                     printf("COMPARACOES FIM\n");
+                    break;
+                default:
                     break;
                     
             }
@@ -241,7 +246,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
         fseek(file, 0, SEEK_END);
         unsigned long long file_size = ftell(file);
-        printf("File size%ld\n",file_size);
+        printf("File size %lld\n",file_size);
         fclose(file);
 
         file = fopen(filename,"rb");

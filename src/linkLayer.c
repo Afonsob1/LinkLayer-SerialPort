@@ -25,6 +25,9 @@ struct termios newtio;
 
 unsigned int ns = 0;
 
+#define ERROR_NACK (1<<0)
+#define ERROR_REPLY (1<<1)
+
 // Alarm function handler
 void alarmHandler(int signal)
 {
@@ -163,6 +166,8 @@ void receive_ACK(U_S_State * state,  char * ack,unsigned char byte, int sn) {
                 *ack=FALSE;
             }
             break;
+        default:
+            break;
     }
     
 }
@@ -255,6 +260,8 @@ void receive_UA(U_S_State * state, unsigned char byte){
                 *state = U_S_StateSTART;
             
             break;
+        default:
+            break;
     }
 
 }
@@ -304,7 +311,9 @@ void receive_disc(U_S_State * state, unsigned char byte){
                 *state = U_S_StateSTART;
             
             break;
-    }
+        default:
+            break;
+    }   
 
 }
 
@@ -357,6 +366,8 @@ void receive_set(U_S_State * state, unsigned char byte){
             else
                 *state = U_S_StateSTART;
             
+            break;
+        default:
             break;
     }
 
@@ -501,7 +512,9 @@ void sendNACK(int fd){
     write(fd, ack, SU_BUF_SIZE);
 }
 
-int llread(int fd, unsigned char * buffer){
+int receive_message(int fd, unsigned char * buffer, int* error){
+    IState state = IStateSTART;
+    size_t data_pos = 0;
 
     unsigned char A = TRANSMITTER_COMMAND;
 
@@ -514,12 +527,6 @@ int llread(int fd, unsigned char * buffer){
     bool reply = false;
     
     unsigned char bcc2 = 0;
-
-    size_t data_pos = 0;
-
-    // read mensage
-
-    IState state = IStateSTART;
 
     while(state!=IStateSTOP){
         char byte;
@@ -618,31 +625,54 @@ int llread(int fd, unsigned char * buffer){
                     is_stuffing = false;
                 }   
                 break;
+
+            default:
+                break;
         }  
+    
     }
 
-    if(is_error){
+    *error = 0;
+    if (reply)
+        *error |= ERROR_REPLY;
+    
+    if (is_error)
+        *error |= ERROR_NACK;
+    
+
+    data_pos-=1;
+    buffer[data_pos-1] = 0;
+    return data_pos;
+}
+
+
+int llread(int fd, unsigned char * buffer){
+    int error = 0;
+
+    // read menssage
+    size_t data_pos = receive_message(fd, buffer, &error);
+
+    if(error & ERROR_NACK){
         printf("Sending NACK %d\n ", ns);
         sendNACK(fd);
         return llread(fd, buffer);
-    }else{
-        
-        sendACK(fd, reply);
+    }else if(error & ERROR_REPLY){
+        sendACK(fd, true);
         printf("Ns: %d\n", ns);
-        if(!reply){
-            ns = (ns)?0:1;
-        }else{
-            printf("Recv Reply\n");
-            return llread(fd, buffer);
-        }
+        printf("Recv Reply\n");
+        return llread(fd, buffer);
     }
 
-    buffer[data_pos-1] = 0;
+    
+    sendACK(fd, false);
+    printf("Ns: %d\n", ns);
+    ns = (ns)?0:1;
 
-    printf("\nReceive %d bytes \n", data_pos-1);
+    printf("Receive %ld bytes \n\n", data_pos);
 
+    //sleep(1);
     // Wait until all bytes have been written to the serial port
-    return 0;
+    return data_pos;
 
 }
 
