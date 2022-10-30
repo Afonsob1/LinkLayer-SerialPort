@@ -176,7 +176,7 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
     alarm_enabled = FALSE;
     timeout_count = 0;
-    while ((state != U_S_StateSTOP || ack==FALSE) && timeout_count<linkLayer.nRetransmissions){
+    while (state != U_S_StateSTOP && timeout_count<linkLayer.nRetransmissions){
         if (alarm_enabled == FALSE)
         {
             (void)signal(SIGALRM, alarmHandler);
