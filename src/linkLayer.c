@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
+#include <sys/time.h>
 
 LinkLayer linkLayer;
 
@@ -24,6 +25,10 @@ struct termios oldtio;
 struct termios newtio;
 
 unsigned int ns = 0;
+
+size_t bytes_sended = 0;
+size_t bytes_received = 0;
+struct timeval total;
 
 #define ERROR_NACK (1<<0)
 #define ERROR_REPLY (1<<1)
@@ -102,8 +107,9 @@ void send_data(int fd,char* buffer, int length){
 
 
     write(fd,frame,6 + 2*length);
+
+
     free(frame);
-    //sleep(1);
 }
 
 unsigned char A = 0;
@@ -174,13 +180,18 @@ void receive_ACK(U_S_State * state,  char * ack,unsigned char byte, int sn) {
 
 int llwrite(int fd, const unsigned char *buffer, int bufSize) {
 
+    bytes_sended += bufSize;
+
     unsigned char in_char;
     char ack=FALSE;
     U_S_State state = U_S_StateSTART;
 
-
+    struct timeval stop, start;
+    gettimeofday(&start, NULL);
     alarm_enabled = FALSE;
+    
     timeout_count = 0;
+    
     while (state != U_S_StateSTOP && timeout_count<linkLayer.nRetransmissions){
         if (alarm_enabled == FALSE)
         {
@@ -192,8 +203,8 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
         }
 
         // Returns after 1 chars has been input
-        read(fd, &in_char, 1);        
-        receive_ACK(&state,&ack,in_char,1-ns);
+        if(read(fd, &in_char, 1)==1)
+            receive_ACK(&state,&ack,in_char,1-ns);
     }
     
     alarm(0); //  alarm
@@ -203,12 +214,21 @@ int llwrite(int fd, const unsigned char *buffer, int bufSize) {
         printf("Received ACK \n");
     }else if(ack==NACKN){
         printf("Received NACK \n");
-        llwrite(fd,buffer,bufSize);
+        bytes_sended -= bufSize;
+
+        gettimeofday(&stop, NULL);
+        total.tv_sec+=stop.tv_sec-start.tv_sec;
+        total.tv_usec+=stop.tv_usec-start.tv_usec;
+
+        return llwrite(fd,buffer,bufSize);
     }
     else{
         printf("Max timeouts Exceeded!\n");
         return -1;
     }
+    gettimeofday(&stop, NULL);
+    total.tv_sec+=stop.tv_sec-start.tv_sec;
+    total.tv_usec+=stop.tv_usec-start.tv_usec;
     return 0;
 }
 
@@ -641,25 +661,38 @@ int receive_message(int fd, unsigned char * buffer, int* error){
     
 
     data_pos-=1;
-    buffer[data_pos-1] = 0;
+    buffer[data_pos] = 0;
     return data_pos;
 }
 
 
 int llread(int fd, unsigned char * buffer){
     int error = 0;
-
+    struct timeval stop, start;
+    gettimeofday(&start, NULL);
     // read menssage
     size_t data_pos = receive_message(fd, buffer, &error);
 
     if(error & ERROR_NACK){
         printf("Sending NACK %d\n ", ns);
         sendNACK(fd);
+
+        bytes_received += data_pos;
+        gettimeofday(&stop, NULL);
+        total.tv_sec+=stop.tv_sec-start.tv_sec;
+        total.tv_usec+=stop.tv_usec-start.tv_usec;
+
         return llread(fd, buffer);
     }else if(error & ERROR_REPLY){
         sendACK(fd, true);
         printf("Ns: %d\n", ns);
         printf("Recv Reply\n");
+
+        bytes_received += data_pos;
+        gettimeofday(&stop, NULL);
+        total.tv_sec+=stop.tv_sec-start.tv_sec;
+        total.tv_usec+=stop.tv_usec-start.tv_usec;
+    
         return llread(fd, buffer);
     }
 
@@ -669,14 +702,23 @@ int llread(int fd, unsigned char * buffer){
     ns = (ns)?0:1;
 
     printf("Receive %ld bytes \n\n", data_pos);
-
-    //sleep(1);
-    // Wait until all bytes have been written to the serial port
+    
+    bytes_received += data_pos;
+    gettimeofday(&stop, NULL);
+    total.tv_sec+=stop.tv_sec-start.tv_sec;
+    total.tv_usec+=stop.tv_usec-start.tv_usec;
     return data_pos;
 
 }
 
 int llclose(int fd, int showStatistics, LinkLayerRole ll){
+
+    printf("-----------------\n");
+    printf("Bytes Received - %ld\n", bytes_received);
+    printf("Bytes Received - %ld\n", bytes_sended);
+    printf("took %lu ms\n", total.tv_sec * 1000 + total.tv_usec/1000);
+    printf ("-----------------\n");
+
     int ret=0;
     char in_char;
     U_S_State state = U_S_StateSTART;
@@ -743,7 +785,6 @@ int llclose(int fd, int showStatistics, LinkLayerRole ll){
         }
         alarm(0); //  alarm
     }
-
      // Restore the old port settings
     if (tcsetattr(fd, TCSANOW, &oldtio) == -1)
     {

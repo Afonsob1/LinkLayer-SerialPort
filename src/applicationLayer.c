@@ -3,7 +3,7 @@
 #include <string.h>
 #include "link_layer.h"
 #include "application_layer.h"
-
+#include <sys/time.h>
 
 int ipow(int base, int exp)
 {
@@ -183,6 +183,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     char sequence_number = 0;
     unsigned char* buffer = (unsigned char*) malloc(MAX_PAYLOAD_SIZE*2);
 
+    struct timeval stop, start;
+    gettimeofday(&start, NULL);
 
     if(appLayer.status==RECEIVER){   
         printf("Receiver\n");    
@@ -267,6 +269,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         sendControl(appLayer.fileDescriptor,END,filename,file_size);
         fclose(file);
     }
+    gettimeofday(&stop, NULL);
+    printf("took %lu s\n", (stop.tv_sec - start.tv_sec) * 1000 + (stop.tv_usec - start.tv_usec)/1000);
     free(buffer);
     llclose(appLayer.fileDescriptor,0,llRole); 
 }
