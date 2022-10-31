@@ -6,7 +6,7 @@
 #include <termios.h>
 #include "application_layer.h"
 
-#define BAUDRATE B38400
+#define BAUDRATE B115200
 #define N_TRIES 3
 #define TIMEOUT 4
 

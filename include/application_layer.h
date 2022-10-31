@@ -4,10 +4,10 @@
 #ifndef _APPLICATION_LAYER_H_
 #define _APPLICATION_LAYER_H_
 
-#define LOG256_2 (1/8)
+#define LOG256_2 (1 / 8)
 
 #define CONTROL_START 2
-#define CONTROL_END 3 
+#define CONTROL_END 3
 
 #define FILE_SIZE 0
 #define FILE_NAME 1
@@ -19,18 +19,17 @@
 #define FILE_SIZE 0
 #define FILE_NAME 1
 
-
 #define TRANSMITTER 0
 #define RECEIVER 1
 
-
 #define MAX_FILENAME_SIZE 1024
 /*
-A aplicação deve ser capaz de chamar as funções: 
+A aplicação deve ser capaz de chamar as funções:
 - llopen() - llread() - llwrite() - llclose()
 */
 
-typedef enum{
+typedef enum
+{
     StateReceiveDEFAULT,
     StateReceiveSTART,
     StateReceiveDATA,
@@ -38,10 +37,10 @@ typedef enum{
     StateReceiveEND
 } StateReceive;
 
-
-typedef struct applicationLayer {
+typedef struct applicationLayer
+{
     int fileDescriptor; /* Descritor correspondente à porta série */
-    int status; /* TRANSMITTER | RECEIVER */
+    int status;         /* TRANSMITTER | RECEIVER */
 } ApplicationLayer;
 
 // Application layer main function.
